@@ -115,11 +115,63 @@ export const convertLexicalToHtml = async (
     },
   };
 
+  /**
+   * Internal link (doc/reference): preserve doc id across Crowdin round-trip via marker,
+   * same pattern as Upload/Relationship. External/custom links use the default converter.
+   */
+  const getInternalLinkMarkerData = (node: {
+    type?: string;
+    fields?: Record<string, unknown>;
+  }): { docId: string; relationTo: string; newTab: boolean } | null => {
+    if (node.type !== 'link' && node.type !== 'autolink') return null;
+    const linkType = node.fields?.linkType ?? node.fields?.type;
+    if (linkType !== 'internal' && linkType !== 'reference') return null;
+    const doc = (node.fields?.doc ?? node.fields?.reference) as
+      | { value?: string | number | { id?: string | number }; relationTo?: string }
+      | undefined;
+    if (!doc?.value) return null;
+    const v = doc.value;
+    const docId =
+      typeof v === 'string' || typeof v === 'number'
+        ? String(v)
+        : v && typeof v === 'object' && (typeof v.id === 'string' || typeof v.id === 'number')
+          ? String(v.id)
+          : null;
+    if (!docId) return null;
+    return {
+      docId,
+      relationTo: doc.relationTo ?? '',
+      newTab: node.fields?.newTab === true,
+    };
+  };
+
   return convertLexicalToHTML({
     converters: ({ defaultConverters }) => ({
       ...defaultConverters,
       ...UploadHTMLConverter,
       ...RelationshipHTMLConverter,
+      link: (params) => {
+        const data = getInternalLinkMarkerData(params.node);
+        if (data) {
+          const children = params.nodesToHTML({
+            nodes: params.node.children ?? [],
+            parent: params.parent,
+          }).join('');
+          return `<span data-block-id=${data.docId} data-relation-to=${data.relationTo} data-new-tab=${String(data.newTab)} data-block-type="pcsInternalLink">${children}</span>`;
+        }
+        return defaultConverters?.link?.(params) ?? '';
+      },
+      autolink: (params) => {
+        const data = getInternalLinkMarkerData(params.node);
+        if (data) {
+          const children = params.nodesToHTML({
+            nodes: params.node.children ?? [],
+            parent: params.parent,
+          }).join('');
+          return `<span data-block-id=${data.docId} data-relation-to=${data.relationTo} data-new-tab=${String(data.newTab)} data-block-type="pcsInternalLink">${children}</span>`;
+        }
+        return defaultConverters?.autolink?.(params) ?? '';
+      },
       blocks: blockConvertors,
     }),
     data: editorData,
@@ -164,6 +216,19 @@ export const convertHtmlToLexical = (
             relationTo,
             value: {
               id: blockId,
+            },
+          };
+        } else if (isBlock && blockType === 'pcsInternalLink') {
+          const relationTo = el && getAttributeValue(el, 'data-relation-to');
+          const newTabAttr = el && getAttributeValue(el, 'data-new-tab');
+          const newTab = newTabAttr === 'true';
+          return {
+            type: 'link',
+            linkType: 'internal',
+            newTab,
+            doc: {
+              relationTo,
+              value: blockId,
             },
           };
         } else {

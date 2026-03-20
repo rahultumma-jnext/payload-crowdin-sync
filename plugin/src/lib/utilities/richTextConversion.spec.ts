@@ -111,4 +111,48 @@ describe('Rich Text Conversion', () => {
       }
     `);
   });
+  it('should handle internal link markers (pcsInternalLink)', () => {
+    const htmlString =
+      '<span data-block-id="abc123" data-block-type="pcsInternalLink" data-relation-to="pages">Link text</span>';
+    const result = convertHtmlToLexical(htmlString);
+    expect(result).toMatchInlineSnapshot(`
+      {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "Link text",
+                  "type": "text",
+                  "version": 1,
+                },
+              ],
+              "direction": "ltr",
+              "format": "",
+              "indent": 0,
+              "type": "link",
+              "version": 2,
+              "fields": {
+                "doc": {
+                  "relationTo": "pages",
+                  "value": "abc123",
+                },
+                "linkType": "internal",
+                "newTab": false,
+              },
+            },
+          ],
+          "direction": "ltr",
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+        },
+      }
+    `);
+  });
 });
